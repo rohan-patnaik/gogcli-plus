@@ -905,6 +905,16 @@ gog drive move <fileId> --parent <destinationFolderId>
 gog drive delete <fileId>             # Move to trash
 gog drive delete <fileId> --permanent # Permanently delete
 
+# Reporting
+gog drive tree --parent <folderId> --depth 2
+gog drive du --parent <folderId> --depth 1
+gog drive inventory --parent <folderId> --depth 0 --max 500
+
+# Sync
+gog drive sync pull --folder <folderId> --out ./drive-sync
+gog drive sync push --folder <folderId> --from ./drive-sync
+gog drive sync pull --folder <folderId> --out ./drive-sync --dry-run
+
 # Permissions
 gog drive permissions <fileId>
 gog drive share <fileId> --to user --email user@example.com --role reader
@@ -1007,6 +1017,10 @@ gog contacts get people/<resourceName> --json | \
   gog contacts update people/<resourceName> --from-file -
 
 gog contacts delete people/<resourceName>
+
+# Dedupe
+gog contacts dedupe
+gog contacts dedupe --match email,phone,name --apply
 
 # Workspace directory (requires Google Workspace)
 gog contacts directory list --max 50
