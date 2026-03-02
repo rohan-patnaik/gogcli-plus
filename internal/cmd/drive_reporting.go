@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"google.golang.org/api/drive/v3"
+	gapi "google.golang.org/api/googleapi"
 
 	"github.com/steipete/gogcli/internal/outfmt"
 	"github.com/steipete/gogcli/internal/ui"
@@ -41,10 +42,6 @@ func (c *DriveTreeCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if maxItems < 0 {
 		maxItems = 0
 	}
-	maxItems := c.Max
-	if maxItems < 0 {
-		maxItems = 0
-	}
 
 	svc, err := newDriveService(ctx, account)
 	if err != nil {
@@ -64,7 +61,7 @@ func (c *DriveTreeCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"items":     items,
 			"truncated": truncated,
 		})
@@ -143,7 +140,7 @@ func (c *DriveInventoryCmd) Run(ctx context.Context, flags *RootFlags) error {
 	sortDriveInventory(items, c.Sort, c.Order)
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"items":     items,
 			"truncated": truncated,
 		})
@@ -202,6 +199,10 @@ func (c *DriveDuCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if depth < 0 {
 		depth = 0
 	}
+	maxItems := c.Max
+	if maxItems < 0 {
+		maxItems = 0
+	}
 
 	svc, err := newDriveService(ctx, account)
 	if err != nil {
@@ -231,7 +232,7 @@ func (c *DriveDuCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, map[string]any{
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{
 			"folders": summaries,
 		})
 	}
@@ -364,7 +365,10 @@ func listDriveChildren(ctx context.Context, svc *drive.Service, parentID string,
 			OrderBy("folder,name").
 			SupportsAllDrives(true).
 			IncludeItemsFromAllDrives(true).
-			Fields("nextPageToken, files(" + fields + ")").
+			Fields(
+				gapi.Field("nextPageToken"),
+				gapi.Field("files("+fields+")"),
+			).
 			Context(ctx)
 		resp, err := call.Do()
 		if err != nil {
