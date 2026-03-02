@@ -38,7 +38,6 @@ type DriveSyncPullCmd struct {
 	Out      string   `name:"out" help:"Local destination directory (required if no state file)"`
 	State    string   `name:"state" help:"Path to sync state file (default: <out>/.gog-sync.json)"`
 	Delete   bool     `name:"delete" help:"Delete local files not present in Drive"`
-	DryRun   bool     `name:"dry-run" help:"Show planned changes without applying"`
 	Checksum bool     `name:"checksum" help:"Use checksums to detect changes"`
 	Include  []string `name:"include" help:"Include glob (repeatable)"`
 	Exclude  []string `name:"exclude" help:"Exclude glob (repeatable)"`
@@ -100,7 +99,7 @@ func (c *DriveSyncPullCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	if c.DryRun {
+	if flags != nil && flags.DryRun {
 		return nil
 	}
 
@@ -122,7 +121,6 @@ type DriveSyncPushCmd struct {
 	From     string   `name:"from" help:"Local source directory (required if no state file)"`
 	State    string   `name:"state" help:"Path to sync state file (default: <from>/.gog-sync.json)"`
 	Delete   bool     `name:"delete" help:"Delete Drive files not present locally"`
-	DryRun   bool     `name:"dry-run" help:"Show planned changes without applying"`
 	Checksum bool     `name:"checksum" help:"Use checksums to detect changes"`
 	Include  []string `name:"include" help:"Include glob (repeatable)"`
 	Exclude  []string `name:"exclude" help:"Exclude glob (repeatable)"`
@@ -181,7 +179,7 @@ func (c *DriveSyncPushCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	if c.DryRun {
+	if flags != nil && flags.DryRun {
 		return nil
 	}
 
@@ -478,37 +476,37 @@ func buildDrivePullPlan(remoteFiles map[string]driveTreeItem, remoteFolders map[
 	plan := driveSyncPlan{}
 	seenLocal := map[string]bool{}
 
-	for path, remote := range remoteFiles {
-		if !allowSyncPath(path, cfg.Include, cfg.Exclude) {
+	for relPath, remote := range remoteFiles {
+		if !allowSyncPath(relPath, cfg.Include, cfg.Exclude) {
 			continue
 		}
-		local, ok := localFiles[path]
+		local, ok := localFiles[relPath]
 		if !ok {
-			plan.Actions = append(plan.Actions, driveSyncAction{Type: "download", Path: path, Drive: remote.ID, MimeType: remote.MimeType, Reason: "missing"})
+			plan.Actions = append(plan.Actions, driveSyncAction{Type: "download", Path: relPath, Drive: remote.ID, MimeType: remote.MimeType, Reason: "missing"})
 			plan.Summary.Download++
-			ensurePlanDirs(&plan, path.Dir(path), "mkdir_local")
+			ensurePlanDirs(&plan, path.Dir(relPath), "mkdir_local")
 			continue
 		}
-		seenLocal[path] = true
+		seenLocal[relPath] = true
 		if needsPull(remote, local, checksum) {
-			plan.Actions = append(plan.Actions, driveSyncAction{Type: "download", Path: path, Drive: remote.ID, MimeType: remote.MimeType, Reason: "changed"})
+			plan.Actions = append(plan.Actions, driveSyncAction{Type: "download", Path: relPath, Drive: remote.ID, MimeType: remote.MimeType, Reason: "changed"})
 			plan.Summary.Download++
-			ensurePlanDirs(&plan, path.Dir(path), "mkdir_local")
+			ensurePlanDirs(&plan, path.Dir(relPath), "mkdir_local")
 		}
 	}
 
 	if allowDelete {
-		for path := range localFiles {
-			if !allowSyncPath(path, cfg.Include, cfg.Exclude) {
+		for relPath := range localFiles {
+			if !allowSyncPath(relPath, cfg.Include, cfg.Exclude) {
 				continue
 			}
-			if _, ok := remoteFiles[path]; ok {
+			if _, ok := remoteFiles[relPath]; ok {
 				continue
 			}
-			if seenLocal[path] {
+			if seenLocal[relPath] {
 				continue
 			}
-			plan.Actions = append(plan.Actions, driveSyncAction{Type: "delete_local", Path: path, Reason: "not in Drive"})
+			plan.Actions = append(plan.Actions, driveSyncAction{Type: "delete_local", Path: relPath, Reason: "not in Drive"})
 			plan.Summary.DeleteLocal++
 		}
 	}
@@ -530,36 +528,36 @@ func buildDrivePushPlan(remoteFiles map[string]driveTreeItem, localFiles map[str
 	plan := driveSyncPlan{}
 	seenRemote := map[string]bool{}
 
-	for path, local := range localFiles {
-		if !allowSyncPath(path, cfg.Include, cfg.Exclude) {
+	for relPath, local := range localFiles {
+		if !allowSyncPath(relPath, cfg.Include, cfg.Exclude) {
 			continue
 		}
-		remote, ok := remoteFiles[path]
+		remote, ok := remoteFiles[relPath]
 		if !ok {
-			plan.Actions = append(plan.Actions, driveSyncAction{Type: "upload", Path: path, Reason: "missing"})
+			plan.Actions = append(plan.Actions, driveSyncAction{Type: "upload", Path: relPath, Reason: "missing"})
 			plan.Summary.Upload++
-			ensurePlanDirs(&plan, path.Dir(path), "mkdir_drive")
+			ensurePlanDirs(&plan, path.Dir(relPath), "mkdir_drive")
 			continue
 		}
-		seenRemote[path] = true
+		seenRemote[relPath] = true
 		if needsPush(remote, local, checksum) {
-			plan.Actions = append(plan.Actions, driveSyncAction{Type: "upload", Path: path, Drive: remote.ID, Reason: "changed"})
+			plan.Actions = append(plan.Actions, driveSyncAction{Type: "upload", Path: relPath, Drive: remote.ID, Reason: "changed"})
 			plan.Summary.Upload++
 		}
 	}
 
 	if allowDelete {
-		for path, remote := range remoteFiles {
-			if !allowSyncPath(path, cfg.Include, cfg.Exclude) {
+		for relPath, remote := range remoteFiles {
+			if !allowSyncPath(relPath, cfg.Include, cfg.Exclude) {
 				continue
 			}
-			if _, ok := localFiles[path]; ok {
+			if _, ok := localFiles[relPath]; ok {
 				continue
 			}
-			if seenRemote[path] {
+			if seenRemote[relPath] {
 				continue
 			}
-			plan.Actions = append(plan.Actions, driveSyncAction{Type: "delete_drive", Path: path, Drive: remote.ID, Reason: "not local"})
+			plan.Actions = append(plan.Actions, driveSyncAction{Type: "delete_drive", Path: relPath, Drive: remote.ID, Reason: "not local"})
 			plan.Summary.DeleteDrive++
 		}
 	}
@@ -646,7 +644,7 @@ func parseDriveTime(raw string) (time.Time, error) {
 
 func outputDriveSyncPlan(ctx context.Context, u *ui.UI, plan driveSyncPlan) error {
 	if outfmt.IsJSON(ctx) {
-		return outfmt.WriteJSON(os.Stdout, plan)
+		return outfmt.WriteJSON(ctx, os.Stdout, plan)
 	}
 
 	w, flush := tableWriter(ctx)
@@ -706,11 +704,11 @@ func applyDrivePullPlan(ctx context.Context, svc *drive.Service, rootPath string
 
 func applyDrivePushPlan(ctx context.Context, svc *drive.Service, rootID string, rootPath string, remoteFolders map[string]driveTreeItem, plan driveSyncPlan) error {
 	folderCache := map[string]string{"": rootID}
-	for path, folder := range remoteFolders {
-		if path == "" {
+	for relPath, folder := range remoteFolders {
+		if relPath == "" {
 			continue
 		}
-		folderCache[path] = folder.ID
+		folderCache[relPath] = folder.ID
 	}
 
 	for _, action := range plan.Actions {

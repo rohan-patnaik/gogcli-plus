@@ -209,7 +209,7 @@ func contactKeys(p *people.Person, match dedupeMatch) []string {
 			if e == nil {
 				continue
 			}
-			if v := normalizeEmail(e.Value); v != "" {
+			if v := normalizeContactEmail(e.Value); v != "" {
 				keys = append(keys, "email:"+v)
 			}
 		}
@@ -290,7 +290,7 @@ func mergeContactGroup(group dedupeGroup) *people.Person {
 	seenPhones := map[string]bool{}
 
 	addEmail := func(value string) {
-		normalized := normalizeEmail(value)
+		normalized := normalizeContactEmail(value)
 		if normalized == "" || seenEmails[normalized] {
 			return
 		}
@@ -376,7 +376,7 @@ func outputDedupeGroups(ctx context.Context, u *ui.UI, groups []dedupeGroup) err
 				"members": members,
 			})
 		}
-		return outfmt.WriteJSON(os.Stdout, map[string]any{"groups": out})
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"groups": out})
 	}
 
 	if len(groups) == 0 {
@@ -427,7 +427,7 @@ func uniqueEmails(list []*people.EmailAddress) []string {
 		if e == nil {
 			continue
 		}
-		normalized := normalizeEmail(e.Value)
+		normalized := normalizeContactEmail(e.Value)
 		if normalized == "" || seen[normalized] {
 			continue
 		}
@@ -454,7 +454,7 @@ func uniquePhones(list []*people.PhoneNumber) []string {
 	return out
 }
 
-func normalizeEmail(value string) string {
+func normalizeContactEmail(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
 }
 
