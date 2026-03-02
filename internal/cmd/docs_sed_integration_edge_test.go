@@ -152,7 +152,7 @@ func TestSedIntegration_MarkdownBulletToPlain(t *testing.T) {
 
 func TestSedIntegration_LongDocument(t *testing.T) {
 	// Build a document with many paragraphs
-	paras := make([]docParagraph, 50)
+	paras := make([]testDocParagraph, 50)
 	for i := range paras {
 		if i%5 == 0 {
 			paras[i] = para(plain("Replace this target word here"))

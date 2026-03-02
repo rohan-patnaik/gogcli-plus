@@ -284,9 +284,166 @@ func parseMarkdownReplacement(repl string) (text string, formats []string) {
 	return text, formats
 }
 
+// parseAddress strips an optional paragraph-number address prefix from a raw expression.
+// Addresses are: N (single), N,M (range), $ (last), $-N (offset from last).
+// Returns nil address and the original string if no address prefix found.
+func parseAddress(raw string) (*sedAddress, string, error) {
+	if len(raw) == 0 {
+		return nil, raw, nil
+	}
+
+	// Check for $ (last paragraph) prefix
+	if raw[0] == '$' {
+		if len(raw) == 1 {
+			return &sedAddress{Start: -1}, "", nil
+		}
+		remaining := raw[1:]
+		// $,N range
+		if remaining[0] == ',' {
+			return nil, raw, fmt.Errorf("invalid address: $ cannot be range start (use N,$ instead)")
+		}
+		// $ followed by a command
+		return &sedAddress{Start: -1}, remaining, nil
+	}
+
+	// Check for leading digits
+	if raw[0] < '0' || raw[0] > '9' {
+		return nil, raw, nil
+	}
+
+	// Parse the start number
+	i := 0
+	for i < len(raw) && raw[i] >= '0' && raw[i] <= '9' {
+		i++
+	}
+	start, err := strconv.Atoi(raw[:i])
+	if err != nil {
+		return nil, raw, nil //nolint:nilerr // not an address, pass through
+	}
+	if start < 1 {
+		return nil, raw, nil
+	}
+
+	remaining := raw[i:]
+
+	// Check for comma (range)
+	if len(remaining) > 0 && remaining[0] == ',' {
+		remaining = remaining[1:]
+		if len(remaining) == 0 {
+			return nil, raw, fmt.Errorf("invalid address: range missing end")
+		}
+		// End can be $ or a number
+		if remaining[0] == '$' {
+			return &sedAddress{Start: start, End: -1, HasRange: true}, remaining[1:], nil
+		}
+		j := 0
+		for j < len(remaining) && remaining[j] >= '0' && remaining[j] <= '9' {
+			j++
+		}
+		if j == 0 {
+			return nil, raw, fmt.Errorf("invalid address: range end must be a number or $")
+		}
+		end, endErr := strconv.Atoi(remaining[:j])
+		if endErr != nil || end < 1 {
+			return nil, raw, fmt.Errorf("invalid address: range end must be >= 1")
+		}
+		if end < start {
+			return nil, raw, fmt.Errorf("invalid address: range end (%d) < start (%d)", end, start)
+		}
+		return &sedAddress{Start: start, End: end, HasRange: true}, remaining[j:], nil
+	}
+
+	// Single address — but only if followed by a command character, not more digits
+	// that could be part of something else (like a pattern).
+	// We need to distinguish "5d" (address 5 + delete) from "5" by itself.
+	if len(remaining) == 0 {
+		// Bare number with nothing after — treat as addressed bare command (needs a command)
+		return &sedAddress{Start: start}, "", nil
+	}
+
+	return &sedAddress{Start: start}, remaining, nil
+}
+
 // parseFullExpr parses a raw expression string into a sedExpr, handling all command types
 // (s//, d//, a//, i//, y//) and flags (g, i, m, N for nth occurrence).
+// Supports optional paragraph-number address prefix: 5d, 3,7s/foo/bar/, $a/text/.
 func parseFullExpr(raw string) (sedExpr, error) {
+	if len(raw) == 0 {
+		return sedExpr{}, fmt.Errorf("empty expression")
+	}
+
+	// Try to parse an address prefix
+	addr, remaining, addrErr := parseAddress(raw)
+	if addrErr != nil {
+		return sedExpr{}, addrErr
+	}
+
+	// If we got an address, parse the remaining expression
+	if addr != nil && remaining != "" {
+		// Remaining starts with a command character
+		var expr sedExpr
+		var err error
+
+		// Check for non-substitution commands
+		if len(remaining) >= 1 {
+			switch remaining[0] {
+			case 'd':
+				if len(remaining) == 1 {
+					// Bare addressed delete: "5d" or "3,7d"
+					expr = sedExpr{command: 'd'}
+					expr.addr = addr
+					return expr, nil
+				}
+				if len(remaining) >= 2 && !isAlphanumeric(remaining[1]) {
+					expr, err = parseDCommand(remaining)
+					if err != nil {
+						return sedExpr{}, err
+					}
+					expr.addr = addr
+					return expr, nil
+				}
+			case 'a':
+				if len(remaining) >= 2 && !isAlphanumeric(remaining[1]) {
+					expr, err = parseAddressedAICommand(remaining, 'a')
+					if err != nil {
+						return sedExpr{}, err
+					}
+					expr.addr = addr
+					return expr, nil
+				}
+			case 'i':
+				if len(remaining) >= 2 && !isAlphanumeric(remaining[1]) {
+					expr, err = parseAddressedAICommand(remaining, 'i')
+					if err != nil {
+						return sedExpr{}, err
+					}
+					expr.addr = addr
+					return expr, nil
+				}
+			}
+		}
+
+		// Otherwise parse as s// or other standard command
+		expr, err = parseFullExprInner(remaining)
+		if err != nil {
+			return sedExpr{}, err
+		}
+		expr.addr = addr
+		return expr, nil
+	}
+
+	// Address with no remaining command — bare addressed command
+	if addr != nil && remaining == "" {
+		return sedExpr{}, fmt.Errorf("address without command: %q", raw)
+	}
+
+	// No address — parse normally
+	return parseFullExprInner(raw)
+}
+
+// parseFullExprInner is the original parseFullExpr logic, extracted so parseFullExpr
+// can handle address prefixes before delegating.
+func parseFullExprInner(raw string) (sedExpr, error) {
 	if len(raw) == 0 {
 		return sedExpr{}, fmt.Errorf("empty expression")
 	}
@@ -455,6 +612,20 @@ func parseDCommand(raw string) (sedExpr, error) {
 	}
 	pattern := applyRegexFlags(parts[0], flagsFromParts(parts, 1))
 	return sedExpr{pattern: pattern, command: 'd'}, nil
+}
+
+// parseAddressedAICommand parses append/insert when used with a paragraph address: Na/text/.
+// Unlike pattern-matched a/i, addressed a/i takes a single field (the text to insert),
+// since the address already specifies where.
+func parseAddressedAICommand(raw string, cmd byte) (sedExpr, error) {
+	if len(raw) < 3 || raw[0] != cmd {
+		return sedExpr{}, fmt.Errorf("invalid %c command", cmd)
+	}
+	parts := splitByDelim(raw[2:], raw[1])
+	if len(parts) < 1 || parts[0] == "" {
+		return sedExpr{}, fmt.Errorf("invalid addressed %c command (expected %c/text/)", cmd, cmd)
+	}
+	return sedExpr{replacement: parts[0], command: cmd}, nil
 }
 
 // parseAICommand parses append/insert commands: a/pattern/text/ or i/pattern/text/

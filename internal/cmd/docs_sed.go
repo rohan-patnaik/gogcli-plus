@@ -20,6 +20,7 @@ type DocsSedCmd struct {
 	Expression  string   `arg:"" optional:"" name:"expression" help:"sed expression: s/pattern/replacement/flags"`
 	Expressions []string `short:"e" help:"Additional sed expressions (repeatable)"`
 	File        string   `short:"f" help:"Read sed expressions from file (one per line, # comments)"`
+	Tab         string   `name:"tab" help:"Tab title or ID for paragraph addressing"`
 }
 
 // parseExpressionLines splits data into trimmed non-empty, non-comment lines.
@@ -75,6 +76,14 @@ func (c *DocsSedCmd) collectExpressions() ([]string, error) {
 	return exprs, nil
 }
 
+// sedAddress represents a paragraph-number address prefix on a sed expression.
+// Addresses target specific paragraphs by number (1-based), or $ for last.
+type sedAddress struct {
+	Start    int  // 1-based paragraph number, -1 = last ($)
+	End      int  // 0 = same as Start (single paragraph), -1 = last ($)
+	HasRange bool // true if comma-separated range was given
+}
+
 type sedExpr struct {
 	pattern     string
 	replacement string // escaped for Go's regexp.ReplaceAllString ($$ = literal $, ${N} = backref)
@@ -85,6 +94,7 @@ type sedExpr struct {
 	command     byte          // 0 for s//, 'd' for delete, 'a' for append, 'i' for insert, 'y' for transliterate
 	brace       *braceExpr    // optional brace expression for SEDMAT v3.5 syntax
 	braceSpans  []*braceSpan  // positioned brace spans for inline scoping
+	addr        *sedAddress   // optional paragraph address prefix (e.g., 5, 3,7, $)
 }
 
 type indexedExpr struct {
@@ -252,6 +262,23 @@ func (c *DocsSedCmd) runPositionalInsert(ctx context.Context, u *ui.UI, account,
 // runSingle executes a single sed expression, routing to the appropriate handler
 // based on the expression type (command, table, positional, cell, image, native, or manual).
 func (c *DocsSedCmd) runSingle(ctx context.Context, u *ui.UI, account, id string, expr sedExpr) error {
+	// Handle addressed expressions (paragraph-number targeting)
+	if expr.addr != nil {
+		switch expr.command {
+		case 'd':
+			return c.runAddressedDelete(ctx, u, account, id, c.Tab, expr)
+		case 'a':
+			return c.runAddressedAppend(ctx, u, account, id, c.Tab, expr)
+		case 'i':
+			return c.runAddressedInsert(ctx, u, account, id, c.Tab, expr)
+		case 0:
+			// s// substitution scoped to addressed paragraphs
+			return c.runAddressedSubstitute(ctx, u, account, id, c.Tab, expr)
+		default:
+			return fmt.Errorf("addressed %c command not supported", expr.command)
+		}
+	}
+
 	// Handle non-substitution commands
 	switch expr.command {
 	case 'd':
@@ -327,9 +354,13 @@ func (c *DocsSedCmd) runBatch(ctx context.Context, u *ui.UI, account, id string,
 	// reliably fetch images when mixed with other batch operations.
 	var imageExprs []indexedExpr
 
+	var addressedExprs []indexedExpr
+
 	for i, expr := range exprs {
 		ie := indexedExpr{i, expr}
 		switch classifyExprForBatch(expr) {
+		case exprCatAddressed:
+			addressedExprs = append(addressedExprs, ie)
 		case exprCatPositional:
 			positionalExprs = append(positionalExprs, ie)
 		case exprCatImage:
@@ -363,6 +394,14 @@ func (c *DocsSedCmd) runBatch(ctx context.Context, u *ui.UI, account, id string,
 		if _, err2 := c.runPositionalInsert(ctx, u, account, id, ie.expr); err2 != nil {
 			return fmt.Errorf("expression %d: %w", ie.index+1, err2)
 		}
+	}
+
+	// Run addressed expressions sequentially (each changes doc state via paragraph map)
+	for _, ie := range addressedExprs {
+		if singleErr := c.runSingle(ctx, u, account, id, ie.expr); singleErr != nil {
+			return fmt.Errorf("expression %d: %w", ie.index+1, singleErr)
+		}
+		totalReplaced++
 	}
 
 	// Batch all native expressions into one API call
@@ -484,10 +523,15 @@ const (
 	exprCatImagePattern                     // image pattern in search (!(n), ![re])
 	exprCatNative                           // plain text replace via native API
 	exprCatManual                           // requires manual formatting path
+	exprCatAddressed                        // paragraph-addressed — sequential, changes doc state
 )
 
 // classifyExprForBatch determines how an expression should be processed in batch mode.
 func classifyExprForBatch(expr sedExpr) exprCategory {
+	// Addressed expressions must run sequentially — they change document state
+	if expr.addr != nil {
+		return exprCatAddressed
+	}
 	if expr.command == 0 && expr.cellRef == nil && expr.tableRef == 0 &&
 		(expr.pattern == "^$" || expr.pattern == "^" || expr.pattern == "$") {
 		return exprCatPositional

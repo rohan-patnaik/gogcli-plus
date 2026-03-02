@@ -38,6 +38,7 @@ type DocsCmd struct {
 	Edit        DocsEditCmd        `cmd:"" name:"edit" help:"Find and replace text in a Google Doc"`
 	Sed         DocsSedCmd         `cmd:"" name:"sed" help:"Regex find/replace (sed-style: s/pattern/replacement/g)"`
 	Clear       DocsClearCmd       `cmd:"" name:"clear" help:"Clear all content from a Google Doc"`
+	Structure   DocsStructureCmd   `cmd:"" name:"structure" aliases:"struct" help:"Show document structure with numbered paragraphs"`
 }
 type DocsExportCmd struct {
 	DocID  string         `arg:"" name:"docId" help:"Doc ID"`
@@ -276,6 +277,7 @@ type DocsCatCmd struct {
 	Tab      string `name:"tab" help:"Tab title or ID to read (omit for default behavior)"`
 	AllTabs  bool   `name:"all-tabs" help:"Show all tabs with headers"`
 	Raw      bool   `name:"raw" help:"Output the raw Google Docs API JSON response without modifications"`
+	Numbered bool   `name:"numbered" short:"N" help:"Prefix each paragraph with its number"`
 }
 
 func (c *DocsCatCmd) Run(ctx context.Context, flags *RootFlags) error {
@@ -338,6 +340,10 @@ func (c *DocsCatCmd) Run(ctx context.Context, flags *RootFlags) error {
 	}
 	if doc == nil {
 		return errors.New("doc not found")
+	}
+
+	if c.Numbered {
+		return c.printNumbered(ctx, doc, "")
 	}
 
 	text := docsPlainText(doc, c.MaxBytes)
@@ -544,6 +550,9 @@ func (c *DocsCatCmd) runWithTabs(ctx context.Context, svc *docs.Service, id stri
 		tab := findTab(tabs, c.Tab)
 		if tab == nil {
 			return fmt.Errorf("tab not found: %s", c.Tab)
+		}
+		if c.Numbered {
+			return c.printNumbered(ctx, doc, c.Tab)
 		}
 		text := tabPlainText(tab, c.MaxBytes)
 		if outfmt.IsJSON(ctx) {
@@ -935,6 +944,99 @@ func (c *DocsClearCmd) Run(ctx context.Context, flags *RootFlags) error {
 		Expression: `s/^$//`,
 	}
 	return sedCmd.Run(ctx, flags)
+}
+
+// --- Structure / Numbered commands ---
+
+// DocsStructureCmd displays document structure with numbered paragraphs.
+type DocsStructureCmd struct {
+	DocID string `arg:"" name:"docId" help:"Doc ID"`
+	Tab   string `name:"tab" help:"Tab title or ID (omit for default)"`
+}
+
+func (c *DocsStructureCmd) Run(ctx context.Context, flags *RootFlags) error {
+	u := ui.FromContext(ctx)
+	account, err := requireAccount(flags)
+	if err != nil {
+		return err
+	}
+
+	id := strings.TrimSpace(c.DocID)
+	if id == "" {
+		return usage("empty docId")
+	}
+
+	svc, err := newDocsService(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	getCall := svc.Documents.Get(id)
+	if c.Tab != "" {
+		getCall = getCall.IncludeTabsContent(true)
+	}
+	doc, err := getCall.Context(ctx).Do()
+	if err != nil {
+		if isDocsNotFound(err) {
+			return fmt.Errorf("doc not found or not a Google Doc (id=%s)", id)
+		}
+		return err
+	}
+	if doc == nil {
+		return errors.New("doc not found")
+	}
+
+	pm, err := buildParagraphMap(doc, c.Tab)
+	if err != nil {
+		return err
+	}
+
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(ctx, os.Stdout, pm)
+	}
+
+	u.Out().Printf(" #  TYPE                CONTENT")
+	for _, p := range pm.Paragraphs {
+		prefix := ""
+		if p.IsBullet {
+			prefix = strings.Repeat("  ", p.NestLevel) + "* "
+		}
+
+		text := p.Text
+		if len(text) > 60 {
+			text = text[:57] + "..."
+		}
+
+		if p.ElemType == "table" {
+			text = fmt.Sprintf("[table %dx%d] %s", p.TableRows, p.TableCols, text)
+		}
+
+		u.Out().Printf("%2d  %-18s  %s%s", p.Num, p.Type, prefix, text)
+	}
+	return nil
+}
+
+// printNumbered prints document content with [N] paragraph number prefixes.
+func (c *DocsCatCmd) printNumbered(ctx context.Context, doc *docs.Document, tabID string) error {
+	pm, err := buildParagraphMap(doc, tabID)
+	if err != nil {
+		return err
+	}
+
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(ctx, os.Stdout, pm)
+	}
+
+	for _, p := range pm.Paragraphs {
+		text := p.Text
+		if p.ElemType == "table" {
+			text = fmt.Sprintf("[table %dx%d] %s", p.TableRows, p.TableCols, text)
+		}
+		if _, err := fmt.Fprintf(os.Stdout, "[%d] %s\n", p.Num, text); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type DocsFindReplaceCmd struct {

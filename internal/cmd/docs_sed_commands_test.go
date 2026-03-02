@@ -514,3 +514,139 @@ func TestParseHexColor(t *testing.T) {
 	assert.InDelta(t, 1.0, g, 0.01)
 	assert.InDelta(t, 0.0, b, 0.01)
 }
+
+// --- Tests for paragraph addressing ---
+
+func TestParseAddress(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantAddr *sedAddress
+		wantRest string
+		wantErr  bool
+	}{
+		{"single number", "5d", &sedAddress{Start: 5}, "d", false},
+		{"single dollar", "$d", &sedAddress{Start: -1}, "d", false},
+		{"range", "3,7d", &sedAddress{Start: 3, End: 7, HasRange: true}, "d", false},
+		{"range with dollar", "3,$d", &sedAddress{Start: 3, End: -1, HasRange: true}, "d", false},
+		{"no address s-cmd", "s/foo/bar/", nil, "s/foo/bar/", false},
+		{"no address d-cmd", "d/foo/", nil, "d/foo/", false},
+		{"bare number", "5", &sedAddress{Start: 5}, "", false},
+		{"address with s-cmd", "5s/foo/bar/", &sedAddress{Start: 5}, "s/foo/bar/", false},
+		{"address with a-cmd", "5a/text/", &sedAddress{Start: 5}, "a/text/", false},
+		{"dollar with s-cmd", "$s/.*/new/", &sedAddress{Start: -1}, "s/.*/new/", false},
+		{"range end < start", "7,3d", nil, "", true},
+		{"range missing end", "3,", nil, "", true},
+		{"empty", "", nil, "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			addr, rest, err := parseAddress(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			if tt.wantAddr == nil {
+				assert.Nil(t, addr)
+			} else {
+				require.NotNil(t, addr)
+				assert.Equal(t, tt.wantAddr.Start, addr.Start)
+				assert.Equal(t, tt.wantAddr.End, addr.End)
+				assert.Equal(t, tt.wantAddr.HasRange, addr.HasRange)
+			}
+			assert.Equal(t, tt.wantRest, rest)
+		})
+	}
+}
+
+func TestParseFullExpr_Addressed(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantAddr *sedAddress
+		wantCmd  byte
+		wantPat  string
+		wantRepl string
+		wantErr  bool
+	}{
+		{"bare delete", "5d", &sedAddress{Start: 5}, 'd', "", "", false},
+		{"range delete", "3,7d", &sedAddress{Start: 3, End: 7, HasRange: true}, 'd', "", "", false},
+		{"dollar delete", "$d", &sedAddress{Start: -1}, 'd', "", "", false},
+		{"addressed s-cmd", "5s/foo/bar/", &sedAddress{Start: 5}, 0, "foo", "bar", false},
+		{"range s-cmd", "3,7s/old/new/g", &sedAddress{Start: 3, End: 7, HasRange: true}, 0, "old", "new", false},
+		{"addressed append", "5a/new text/", &sedAddress{Start: 5}, 'a', "", "new text", false},
+		{"addressed insert", "3i/before text/", &sedAddress{Start: 3}, 'i', "", "before text", false},
+		{"dollar append", "$a/last line/", &sedAddress{Start: -1}, 'a', "", "last line", false},
+		{"addressed d-with-pattern", "5d/foo/", &sedAddress{Start: 5}, 'd', "foo", "", false},
+		{"bare number error", "5", nil, 0, "", "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expr, err := parseFullExpr(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			if tt.wantAddr == nil {
+				assert.Nil(t, expr.addr)
+			} else {
+				require.NotNil(t, expr.addr)
+				assert.Equal(t, tt.wantAddr.Start, expr.addr.Start)
+				assert.Equal(t, tt.wantAddr.End, expr.addr.End)
+				assert.Equal(t, tt.wantAddr.HasRange, expr.addr.HasRange)
+			}
+			assert.Equal(t, tt.wantCmd, expr.command)
+			if tt.wantPat != "" {
+				assert.Equal(t, tt.wantPat, expr.pattern)
+			}
+		})
+	}
+}
+
+func TestResolveAddress(t *testing.T) {
+	pm := &paragraphMap{
+		Paragraphs: []docParagraph{
+			{Num: 1, Text: "first", StartIndex: 0, EndIndex: 6},
+			{Num: 2, Text: "second", StartIndex: 6, EndIndex: 13},
+			{Num: 3, Text: "third", StartIndex: 13, EndIndex: 19},
+			{Num: 4, Text: "fourth", StartIndex: 19, EndIndex: 26},
+			{Num: 5, Text: "fifth", StartIndex: 26, EndIndex: 32},
+		},
+	}
+
+	// Single address
+	targets, err := resolveAddress(&sedAddress{Start: 3}, pm)
+	require.NoError(t, err)
+	assert.Len(t, targets, 1)
+	assert.Equal(t, "third", targets[0].Text)
+
+	// Last paragraph ($)
+	targets, err = resolveAddress(&sedAddress{Start: -1}, pm)
+	require.NoError(t, err)
+	assert.Len(t, targets, 1)
+	assert.Equal(t, "fifth", targets[0].Text)
+
+	// Range
+	targets, err = resolveAddress(&sedAddress{Start: 2, End: 4, HasRange: true}, pm)
+	require.NoError(t, err)
+	assert.Len(t, targets, 3)
+	assert.Equal(t, "second", targets[0].Text)
+	assert.Equal(t, "fourth", targets[2].Text)
+
+	// Range ending with $
+	targets, err = resolveAddress(&sedAddress{Start: 3, End: -1, HasRange: true}, pm)
+	require.NoError(t, err)
+	assert.Len(t, targets, 3)
+	assert.Equal(t, "third", targets[0].Text)
+	assert.Equal(t, "fifth", targets[2].Text)
+
+	// Out of range
+	_, err = resolveAddress(&sedAddress{Start: 10}, pm)
+	assert.Error(t, err)
+
+	// Empty paragraph map
+	_, err = resolveAddress(&sedAddress{Start: 1}, &paragraphMap{})
+	assert.Error(t, err)
+}

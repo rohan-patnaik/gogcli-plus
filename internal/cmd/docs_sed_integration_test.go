@@ -62,7 +62,7 @@ func mockDocsServerAdvanced(t *testing.T, doc *docs.Document, onBatchUpdate func
 }
 
 // buildDoc constructs a realistic multi-paragraph Google Doc for testing.
-func buildDoc(paragraphs ...docParagraph) *docs.Document {
+func buildDoc(paragraphs ...testDocParagraph) *docs.Document {
 	content := make([]*docs.StructuralElement, 0, len(paragraphs))
 	idx := int64(1) // Google Docs indices start at 1 (0 is reserved)
 
@@ -190,7 +190,7 @@ type textRun struct {
 	style *docs.TextStyle
 }
 
-type docParagraph struct {
+type testDocParagraph struct {
 	runs []textRun
 }
 
@@ -202,8 +202,8 @@ func bold(text string) textRun {
 	return textRun{text: text, style: &docs.TextStyle{Bold: true}}
 }
 
-func para(runs ...textRun) docParagraph {
-	return docParagraph{runs: runs}
+func para(runs ...textRun) testDocParagraph {
+	return testDocParagraph{runs: runs}
 }
 
 // runSedIntegration runs a DocsSedCmd against a mock server and returns captured requests.
