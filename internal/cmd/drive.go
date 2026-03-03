@@ -33,6 +33,7 @@ var (
 )
 
 const (
+	driveRootID            = "root"
 	driveMimeFolder        = "application/vnd.google-apps.folder"
 	driveMimeGoogleDoc     = "application/vnd.google-apps.document"
 	driveMimeGoogleSheet   = "application/vnd.google-apps.spreadsheet"
@@ -101,7 +102,7 @@ func (c *DriveLsCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	folderID := strings.TrimSpace(c.Parent)
 	if folderID == "" {
-		folderID = "root"
+		folderID = driveRootID
 	}
 
 	svc, err := newDriveService(ctx, account)

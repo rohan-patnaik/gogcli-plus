@@ -32,7 +32,7 @@ func (c *DriveTreeCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	rootID := strings.TrimSpace(c.Parent)
 	if rootID == "" {
-		rootID = "root"
+		rootID = driveRootID
 	}
 	depth := c.Depth
 	if depth < 0 {
@@ -109,7 +109,7 @@ func (c *DriveInventoryCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	rootID := strings.TrimSpace(c.Parent)
 	if rootID == "" {
-		rootID = "root"
+		rootID = driveRootID
 	}
 	depth := c.Depth
 	if depth < 0 {
@@ -193,7 +193,7 @@ func (c *DriveDuCmd) Run(ctx context.Context, flags *RootFlags) error {
 
 	rootID := strings.TrimSpace(c.Parent)
 	if rootID == "" {
-		rootID = "root"
+		rootID = driveRootID
 	}
 	depth := c.Depth
 	if depth < 0 {
@@ -291,7 +291,7 @@ const (
 func listDriveTree(ctx context.Context, svc *drive.Service, opts driveTreeOptions) ([]driveTreeItem, bool, error) {
 	rootID := strings.TrimSpace(opts.RootID)
 	if rootID == "" {
-		rootID = "root"
+		rootID = driveRootID
 	}
 	fields := strings.TrimSpace(opts.Fields)
 	if fields == "" {
@@ -351,7 +351,7 @@ func listDriveTree(ctx context.Context, svc *drive.Service, opts driveTreeOption
 
 func listDriveChildren(ctx context.Context, svc *drive.Service, parentID string, fields string) ([]*drive.File, error) {
 	if parentID == "" {
-		parentID = "root"
+		parentID = driveRootID
 	}
 	q := buildDriveListQuery(parentID, "")
 	out := make([]*drive.File, 0, 64)

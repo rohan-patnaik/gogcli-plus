@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/md5" // #nosec G501 -- Drive API exposes MD5 checksums; used only for sync change detection.
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -67,8 +67,8 @@ func (c *DriveSyncPullCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if cfg.FolderID == "" || rootPath == "" {
 		return usage("missing --folder or --out (or state file)")
 	}
-	if err := os.MkdirAll(rootPath, 0o755); err != nil {
-		return err
+	if mkdirErr := os.MkdirAll(rootPath, 0o750); mkdirErr != nil {
+		return mkdirErr
 	}
 
 	svc, err := newDriveService(ctx, account)
@@ -234,7 +234,7 @@ func loadDriveSyncConfig(statePath string, rootPath string, direction string, ac
 		return "", rootPath, cfg, nil
 	}
 
-	if data, err := os.ReadFile(statePath); err == nil {
+	if data, err := os.ReadFile(statePath); err == nil { //nolint:gosec // state path is explicit CLI input or derived from local sync root
 		var stored driveSyncConfig
 		if jsonErr := json.Unmarshal(data, &stored); jsonErr == nil {
 			if cfg.FolderID == "" {
@@ -271,8 +271,8 @@ func resolveDriveSyncStatePath(explicit string, rootPath string) (string, error)
 	return filepath.Join(rootPath, driveSyncStateFile), nil
 }
 
-func saveDriveSyncState(path string, cfg driveSyncConfig) error {
-	if path == "" {
+func saveDriveSyncState(statePath string, cfg driveSyncConfig) error {
+	if statePath == "" {
 		return nil
 	}
 	cfg.Version = driveSyncVersion
@@ -284,7 +284,7 @@ func saveDriveSyncState(path string, cfg driveSyncConfig) error {
 	}
 	data = append(data, '\n')
 
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	if err := os.WriteFile(statePath, data, 0o600); err != nil {
 		return fmt.Errorf("write sync state: %w", err)
 	}
 	return nil
@@ -308,13 +308,13 @@ func splitDriveItems(items []driveTreeItem, exportDocs bool) (map[string]driveTr
 			folders[it.Path] = it
 			continue
 		}
-		path := it.Path
+		relPath := it.Path
 		if exportDocs && strings.HasPrefix(it.MimeType, "application/vnd.google-apps.") {
 			exportExt := driveExportExtension(driveExportMimeType(it.MimeType))
-			path = replaceExt(path, exportExt)
+			relPath = replaceExt(relPath, exportExt)
 		}
-		it.Path = path
-		files[path] = it
+		it.Path = relPath
+		files[relPath] = it
 	}
 	return files, folders
 }
@@ -432,8 +432,8 @@ func ensureDriveSyncExcludes(excludes []string) []string {
 	return out
 }
 
-func fileMD5(path string) (string, error) {
-	f, err := os.Open(path) //nolint:gosec // user-provided path
+func fileMD5(filePath string) (string, error) {
+	f, err := os.Open(filePath) //nolint:gosec // user-provided path
 	if err != nil {
 		return "", err
 	}
@@ -585,9 +585,9 @@ func ensurePlanDirs(plan *driveSyncPlan, dir string, actionType string) {
 	}
 }
 
-func hasAction(actions []driveSyncAction, actionType string, path string) bool {
+func hasAction(actions []driveSyncAction, actionType string, actionPath string) bool {
 	for _, a := range actions {
-		if a.Type == actionType && a.Path == path {
+		if a.Type == actionType && a.Path == actionPath {
 			return true
 		}
 	}
@@ -596,10 +596,7 @@ func hasAction(actions []driveSyncAction, actionType string, path string) bool {
 
 func needsPull(remote driveTreeItem, local localFileInfo, checksum bool) bool {
 	if checksum && remote.MD5 != "" && local.MD5 != "" {
-		if remote.MD5 != local.MD5 {
-			return true
-		}
-		return false
+		return remote.MD5 != local.MD5
 	}
 	if remote.Size > 0 && remote.Size != local.Size {
 		return true
@@ -616,10 +613,7 @@ func needsPush(remote driveTreeItem, local localFileInfo, checksum bool) bool {
 		return false
 	}
 	if checksum && remote.MD5 != "" && local.MD5 != "" {
-		if remote.MD5 != local.MD5 {
-			return true
-		}
-		return false
+		return remote.MD5 != local.MD5
 	}
 	if remote.Size > 0 && remote.Size != local.Size {
 		return true
@@ -673,7 +667,7 @@ func applyDrivePullPlan(ctx context.Context, svc *drive.Service, rootPath string
 			continue
 		}
 		dir := filepath.Join(rootPath, filepath.FromSlash(action.Path))
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return err
 		}
 	}

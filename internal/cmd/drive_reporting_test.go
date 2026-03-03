@@ -3,18 +3,21 @@ package cmd
 import "testing"
 
 func TestSanitizeDriveName(t *testing.T) {
-	cases := map[string]string{
-		"":       "_",
-		".":      "_",
-		"..":     "_",
-		"hello":  "hello",
-		"a/b":    "a_b",
-		"a\\b":   "a_b",
-		"  foo ": "foo",
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{in: "", want: "_"},
+		{in: ".", want: "_"},
+		{in: "..", want: "_"},
+		{in: "hello", want: "hello"},
+		{in: "a/b", want: "a_b"},
+		{in: "a\\b", want: "a_b"},
+		{in: "  foo ", want: "foo"},
 	}
-	for input, expected := range cases {
-		if got := sanitizeDriveName(input); got != expected {
-			t.Fatalf("sanitizeDriveName(%q) = %q, want %q", input, got, expected)
+	for _, tc := range cases {
+		if got := sanitizeDriveName(tc.in); got != tc.want {
+			t.Fatalf("sanitizeDriveName(%q) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
 }
