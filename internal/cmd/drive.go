@@ -31,6 +31,7 @@ var (
 )
 
 const (
+	driveRootID            = "root"
 	driveMimeFolder        = "application/vnd.google-apps.folder"
 	driveMimeGoogleDoc     = "application/vnd.google-apps.document"
 	driveMimeGoogleSheet   = "application/vnd.google-apps.spreadsheet"

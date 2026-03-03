@@ -36,7 +36,7 @@ func (c *ContactsDedupeCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	contacts, err := listContacts(ctx, svc, c.Max)
+	contacts, err := listContacts(svc, c.Max)
 	if err != nil {
 		return err
 	}
@@ -109,13 +109,13 @@ func parseDedupeMatch(value string) (dedupeMatch, error) {
 	return out, nil
 }
 
-func listContacts(ctx context.Context, svc *people.Service, max int64) ([]*people.Person, error) {
+func listContacts(svc *people.Service, maxResults int64) ([]*people.Person, error) {
 	out := make([]*people.Person, 0, 128)
 	var pageToken string
 	for {
 		pageSize := int64(500)
-		if max > 0 && max < pageSize {
-			pageSize = max
+		if maxResults > 0 && maxResults < pageSize {
+			pageSize = maxResults
 		}
 		call := svc.People.Connections.List(peopleMeResource).
 			PersonFields(contactsReadMask).
@@ -131,7 +131,7 @@ func listContacts(ctx context.Context, svc *people.Service, max int64) ([]*peopl
 				continue
 			}
 			out = append(out, p)
-			if max > 0 && int64(len(out)) >= max {
+			if maxResults > 0 && int64(len(out)) >= maxResults {
 				return out, nil
 			}
 		}
