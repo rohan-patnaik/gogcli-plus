@@ -31,7 +31,7 @@ func (c *DocsCatCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("empty docId")
 	}
 
-	_, svc, err := requireDocsService(ctx, flags)
+	svc, err := requireDocsService(ctx, flags)
 	if err != nil {
 		return err
 	}
@@ -161,7 +161,7 @@ func (c *DocsListTabsCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("empty docId")
 	}
 
-	_, svc, err := requireDocsService(ctx, flags)
+	svc, err := requireDocsService(ctx, flags)
 	if err != nil {
 		return err
 	}
@@ -207,7 +207,7 @@ func (c *DocsStructureCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("empty docId")
 	}
 
-	_, svc, err := requireDocsService(ctx, flags)
+	svc, err := requireDocsService(ctx, flags)
 	if err != nil {
 		return err
 	}

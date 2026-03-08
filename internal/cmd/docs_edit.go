@@ -40,7 +40,7 @@ func (c *DocsWriteCmd) Run(ctx context.Context, kctx *kong.Context, flags *RootF
 		return usage("empty text")
 	}
 
-	_, svc, err := requireDocsService(ctx, flags)
+	svc, err := requireDocsService(ctx, flags)
 	if err != nil {
 		return err
 	}
@@ -144,7 +144,7 @@ func (c *DocsUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *Root
 		return usage("invalid --index (must be >= 1)")
 	}
 
-	_, svc, err := requireDocsService(ctx, flags)
+	svc, err := requireDocsService(ctx, flags)
 	if err != nil {
 		return err
 	}
@@ -230,7 +230,7 @@ func (c *DocsInsertCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("--index must be >= 1 (index 0 is reserved)")
 	}
 
-	_, svc, err := requireDocsService(ctx, flags)
+	svc, err := requireDocsService(ctx, flags)
 	if err != nil {
 		return err
 	}
@@ -287,7 +287,7 @@ func (c *DocsDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("--end must be greater than --start")
 	}
 
-	_, svc, err := requireDocsService(ctx, flags)
+	svc, err := requireDocsService(ctx, flags)
 	if err != nil {
 		return err
 	}
@@ -371,7 +371,7 @@ func (c *DocsFindReplaceCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("find text cannot be empty")
 	}
 
-	_, svc, err := requireDocsService(ctx, flags)
+	svc, err := requireDocsService(ctx, flags)
 	if err != nil {
 		return err
 	}

@@ -63,7 +63,7 @@ func (c *DocsInfoCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return usage("empty docId")
 	}
 
-	_, svc, err := requireDocsService(ctx, flags)
+	svc, err := requireDocsService(ctx, flags)
 	if err != nil {
 		return err
 	}
