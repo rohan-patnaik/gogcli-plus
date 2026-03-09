@@ -3,31 +3,32 @@
 ![GitHub Repo Banner](https://ghrb.waren.build/banner?header=gogcli%F0%9F%A7%AD&subheader=Google+in+your+terminal&bg=f3f4f6&color=1f2937&support=true)
 <!-- Created with GitHub Repo Banner by Waren Gonzaga: https://ghrb.waren.build -->
 
-Fast, script-friendly CLI for Gmail, Calendar, Chat, Classroom, Drive, Docs, Slides, Sheets, Forms, Apps Script, Contacts, Tasks, People, Groups (Workspace), and Keep (Workspace-only). JSON-first output, multiple accounts, and least-privilege auth built in.
+Fast, script-friendly CLI for Gmail, Calendar, Chat, Classroom, Drive, Docs, Slides, Sheets, Forms, Apps Script, Contacts, Tasks, People, Admin, Groups (Workspace), and Keep (Workspace-only). JSON-first output, multiple accounts, and flexible auth built in.
 
 ## Features
 
-- **Gmail** - search threads and messages, send emails, view attachments, manage labels/drafts/filters/delegation/vacation settings, history, and watch (Pub/Sub push)
+- **Gmail** - search threads/messages, send mail, view attachments, manage labels/drafts/filters/delegation/vacation settings, modify single messages, export filters, inspect history, and run Pub/Sub watch webhooks
 - **Email tracking** - track opens for `gog gmail send --track` with a small Cloudflare Worker backend
-- **Calendar** - list/create/update events, detect conflicts, manage invitations, check free/busy status, team calendars, propose new times, focus/OOO/working-location events, recurrence + reminders
+- **Calendar** - list/create/update/delete events, manage invitations, aliases, subscriptions, team calendars, free/busy/conflicts, propose new times, focus/OOO/working-location events, recurrence, and reminders
 - **Classroom** - manage courses, roster, coursework/materials, submissions, announcements, topics, invitations, guardians, profiles
-- **Chat** - list/find/create spaces, list messages/threads (filter by thread/unread), send messages and DMs (Workspace-only)
-- **Drive** - list/search/upload/download files, manage permissions/comments, organize folders, list shared drives
-- **Contacts** - search/create/update contacts, access Workspace directory/other contacts
-- **Tasks** - manage tasklists and tasks: get/create/add/update/done/undo/delete/clear, repeat schedule materialization
-- **Sheets** - read/write/update spreadsheets, insert rows/cols, format cells, read notes, create new sheets (and export via Drive)
-- **Sheets** - read/write/update spreadsheets, insert rows/cols, format cells, read notes, find/replace text, create new sheets (and export via Drive)
-- **Forms** - create/get forms and inspect responses
-- **Apps Script** - create/get projects, inspect content, and run functions
-- **Docs/Slides** - export to PDF/DOCX/PPTX via Drive (plus create/copy, docs-to-text, template-based creation with text replacement, and **sedmat** sed-style document editing with Markdown formatting, images, and tables)
-- **People** - access profile information
-- **Keep (Workspace only)** - list/get/search notes and download attachments (service account + domain-wide delegation)
+- **Chat** - list/find/create spaces, list messages/threads, send messages and DMs, and manage emoji reactions (Workspace-only)
+- **Drive** - list/search/upload/download files, replace uploads in-place, convert uploads, manage permissions/comments, organize folders, and list shared drives
+- **Contacts** - search/create/update contacts, including addresses, relations, org/title metadata, custom fields, Workspace directory, and other contacts
+- **Tasks** - manage tasklists and tasks: get/create/add/update/done/undo/delete/clear, plus repeat schedule materialization with RRULE aliases
+- **Sheets** - read/write/update spreadsheets, insert rows/cols, manage tabs and named ranges, format/merge/freeze/resize cells, read/write notes, inspect formats, find/replace text, list links, and create/export sheets
+- **Forms** - create/update forms, manage questions, inspect responses, and manage watches
+- **Apps Script** - create/get/bind projects, inspect content, and run functions
+- **Docs/Slides** - create/copy/export docs/slides, edit Docs by tab, import Markdown, do richer find-replace, export Docs as Markdown/HTML, and generate Slides from Markdown or templates
+- **People** - profile lookup and directory search helpers
+- **Keep (Workspace only)** - list/get/search/create/delete notes and download attachments (service account + domain-wide delegation)
+- **Admin (Workspace only)** - Workspace Admin users/groups commands for common directory operations
 - **Groups** - list groups you belong to, view group members (Google Workspace)
 - **Local time** - quick local/UTC time display for scripts and agents
-- **Multiple accounts** - manage multiple Google accounts simultaneously (with aliases)
+- **Multiple accounts** - manage multiple Google accounts simultaneously, with account aliases and per-client OAuth buckets
 - **Command allowlist** - restrict top-level commands for sandboxed/agent runs
 - **Secure credential storage** using OS keyring or encrypted on-disk keyring (configurable)
 - **Auto-refreshing tokens** - authenticate once, use indefinitely
+- **Flexible auth** - OAuth refresh tokens, ADC, direct access tokens, service accounts, manual/remote flows, `--extra-scopes`, and proxy-safe callbacks
 - **Least-privilege auth** - `--readonly`, `--drive-scope`, and `--gmail-scope` to request fewer scopes
 - **Workspace service accounts** - domain-wide delegation auth (preferred when configured)
 - **Parseable output** - JSON mode for scripting and automation (Calendar adds day-of-week fields)
@@ -77,17 +78,21 @@ Before adding an account, create OAuth2 credentials from Google Cloud Console:
 1. Open the Google Cloud Console credentials page: https://console.cloud.google.com/apis/credentials
 1. Create a project: https://console.cloud.google.com/projectcreate
 2. Enable the APIs you need:
+   - Admin SDK API: https://console.cloud.google.com/apis/api/admin.googleapis.com
+   - Apps Script API: https://console.cloud.google.com/apis/api/script.googleapis.com
+   - Cloud Identity API (Groups): https://console.cloud.google.com/apis/api/cloudidentity.googleapis.com
    - Gmail API: https://console.cloud.google.com/apis/api/gmail.googleapis.com
    - Google Calendar API: https://console.cloud.google.com/apis/api/calendar-json.googleapis.com
    - Google Chat API: https://console.cloud.google.com/apis/api/chat.googleapis.com
+   - Google Docs API: https://console.cloud.google.com/apis/api/docs.googleapis.com
    - Google Drive API: https://console.cloud.google.com/apis/api/drive.googleapis.com
    - Google Classroom API: https://console.cloud.google.com/apis/api/classroom.googleapis.com
+   - Google Keep API: https://console.cloud.google.com/apis/api/keep.googleapis.com
    - People API (Contacts): https://console.cloud.google.com/apis/api/people.googleapis.com
    - Google Tasks API: https://console.cloud.google.com/apis/api/tasks.googleapis.com
    - Google Sheets API: https://console.cloud.google.com/apis/api/sheets.googleapis.com
    - Google Forms API: https://console.cloud.google.com/apis/api/forms.googleapis.com
-   - Apps Script API: https://console.cloud.google.com/apis/api/script.googleapis.com
-   - Cloud Identity API (Groups): https://console.cloud.google.com/apis/api/cloudidentity.googleapis.com
+   - Google Slides API: https://console.cloud.google.com/apis/api/slides.googleapis.com
 3. Configure OAuth consent screen: https://console.cloud.google.com/auth/branding
 4. If your app is in "Testing", add test users: https://console.cloud.google.com/auth/audience
 5. Create OAuth client:
