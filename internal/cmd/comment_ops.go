@@ -84,10 +84,10 @@ func listDriveComments(ctx context.Context, svc *drive.Service, fileID string, o
 	}
 }
 
-func fetchDriveCommentsPage(ctx context.Context, svc *drive.Service, fileID string, max int64, pageToken string, commentFields string) ([]*drive.Comment, string, error) {
+func fetchDriveCommentsPage(ctx context.Context, svc *drive.Service, fileID string, pageSize int64, pageToken string, commentFields string) ([]*drive.Comment, string, error) {
 	call := svc.Comments.List(fileID).
 		IncludeDeleted(false).
-		PageSize(max).
+		PageSize(pageSize).
 		Fields(gapi.Field(driveCommentListFields), gapi.Field(commentFields)).
 		Context(ctx)
 	if strings.TrimSpace(pageToken) != "" {

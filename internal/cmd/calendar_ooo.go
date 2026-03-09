@@ -51,9 +51,9 @@ func (c *CalendarOOOCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	created, err := mutation.insertEvent(event, calendarInsertOptions{})
+	created, err := mutation.insertEvent(ctx, event, calendarInsertOptions{})
 	if err != nil {
 		return err
 	}
-	return mutation.writeEvent(created)
+	return mutation.writeEvent(ctx, created)
 }

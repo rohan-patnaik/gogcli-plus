@@ -75,7 +75,7 @@ func (c *CalendarCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	created, err := mutation.insertEvent(plan.Event, calendarInsertOptions{
+	created, err := mutation.insertEvent(ctx, plan.Event, calendarInsertOptions{
 		sendUpdates:         plan.SendUpdates,
 		conferenceVersion1:  plan.WithMeet,
 		supportsAttachments: len(plan.Event.Attachments) > 0,
@@ -83,7 +83,7 @@ func (c *CalendarCreateCmd) Run(ctx context.Context, flags *RootFlags) error {
 	if err != nil {
 		return err
 	}
-	return mutation.writeEvent(created)
+	return mutation.writeEvent(ctx, created)
 }
 
 func (c *CalendarCreateCmd) resolveCreateEventType() (string, error) {
@@ -318,7 +318,7 @@ func (c *CalendarUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *
 		}
 	}
 
-	updated, err := mutation.patchEvent(targetEventID, patch, sendUpdates)
+	updated, err := mutation.patchEvent(ctx, targetEventID, patch, sendUpdates)
 	if err != nil {
 		return err
 	}
@@ -327,7 +327,7 @@ func (c *CalendarUpdateCmd) Run(ctx context.Context, kctx *kong.Context, flags *
 			return err
 		}
 	}
-	return mutation.writeEvent(updated)
+	return mutation.writeEvent(ctx, updated)
 }
 
 func (c *CalendarUpdateCmd) buildUpdatePatch(kctx *kong.Context) (*calendar.Event, bool, error) {
@@ -841,7 +841,7 @@ func (c *CalendarDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 		targetEventID = instanceID
 	}
 
-	if err := mutation.deleteEvent(targetEventID, sendUpdates); err != nil {
+	if err := mutation.deleteEvent(ctx, targetEventID, sendUpdates); err != nil {
 		return err
 	}
 	if scope == scopeFuture {
@@ -849,7 +849,7 @@ func (c *CalendarDeleteCmd) Run(ctx context.Context, flags *RootFlags) error {
 		if truncateErr != nil {
 			return truncateErr
 		}
-		_, patchErr := mutation.patchEvent(eventID, &calendar.Event{Recurrence: truncated}, sendUpdates)
+		_, patchErr := mutation.patchEvent(ctx, eventID, &calendar.Event{Recurrence: truncated}, sendUpdates)
 		if patchErr != nil {
 			return patchErr
 		}

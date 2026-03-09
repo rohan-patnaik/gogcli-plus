@@ -38,9 +38,9 @@ func (c *DriveDrivesCmd) Run(ctx context.Context, flags *RootFlags) error {
 		if q := strings.TrimSpace(c.Query); q != "" {
 			call = call.Q(q)
 		}
-		resp, err := call.Do()
-		if err != nil {
-			return nil, "", err
+		resp, callErr := call.Do()
+		if callErr != nil {
+			return nil, "", callErr
 		}
 		return resp.Drives, resp.NextPageToken, nil
 	}

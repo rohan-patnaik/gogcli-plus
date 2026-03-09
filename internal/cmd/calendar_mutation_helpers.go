@@ -11,7 +11,6 @@ import (
 )
 
 type calendarMutationContext struct {
-	ctx        context.Context
 	u          *ui.UI
 	svc        *calendar.Service
 	calendarID string
@@ -33,15 +32,14 @@ func newCalendarMutationContext(ctx context.Context, flags *RootFlags, calendarI
 		return nil, err
 	}
 	return &calendarMutationContext{
-		ctx:        ctx,
 		u:          ui.FromContext(ctx),
 		svc:        svc,
 		calendarID: resolvedCalendarID,
 	}, nil
 }
 
-func (m *calendarMutationContext) insertEvent(event *calendar.Event, opts calendarInsertOptions) (*calendar.Event, error) {
-	call := m.svc.Events.Insert(m.calendarID, event).Context(m.ctx)
+func (m *calendarMutationContext) insertEvent(ctx context.Context, event *calendar.Event, opts calendarInsertOptions) (*calendar.Event, error) {
+	call := m.svc.Events.Insert(m.calendarID, event).Context(ctx)
 	if opts.sendUpdates != "" {
 		call = call.SendUpdates(opts.sendUpdates)
 	}
@@ -54,26 +52,26 @@ func (m *calendarMutationContext) insertEvent(event *calendar.Event, opts calend
 	return call.Do()
 }
 
-func (m *calendarMutationContext) patchEvent(eventID string, patch *calendar.Event, sendUpdates string) (*calendar.Event, error) {
-	call := m.svc.Events.Patch(m.calendarID, eventID, patch).Context(m.ctx)
+func (m *calendarMutationContext) patchEvent(ctx context.Context, eventID string, patch *calendar.Event, sendUpdates string) (*calendar.Event, error) {
+	call := m.svc.Events.Patch(m.calendarID, eventID, patch).Context(ctx)
 	if sendUpdates != "" {
 		call = call.SendUpdates(sendUpdates)
 	}
 	return call.Do()
 }
 
-func (m *calendarMutationContext) deleteEvent(eventID, sendUpdates string) error {
-	call := m.svc.Events.Delete(m.calendarID, eventID).Context(m.ctx)
+func (m *calendarMutationContext) deleteEvent(ctx context.Context, eventID, sendUpdates string) error {
+	call := m.svc.Events.Delete(m.calendarID, eventID).Context(ctx)
 	if sendUpdates != "" {
 		call = call.SendUpdates(sendUpdates)
 	}
 	return call.Do()
 }
 
-func (m *calendarMutationContext) writeEvent(event *calendar.Event) error {
-	tz, loc, _ := getCalendarLocation(m.ctx, m.svc, m.calendarID)
-	if outfmt.IsJSON(m.ctx) {
-		return outfmt.WriteJSON(m.ctx, os.Stdout, map[string]any{"event": wrapEventWithDaysWithTimezone(event, tz, loc)})
+func (m *calendarMutationContext) writeEvent(ctx context.Context, event *calendar.Event) error {
+	tz, loc, _ := getCalendarLocation(ctx, m.svc, m.calendarID)
+	if outfmt.IsJSON(ctx) {
+		return outfmt.WriteJSON(ctx, os.Stdout, map[string]any{"event": wrapEventWithDaysWithTimezone(event, tz, loc)})
 	}
 	printCalendarEventWithTimezone(m.u, event, tz, loc)
 	return nil

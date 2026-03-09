@@ -94,13 +94,13 @@ func (c *CalendarRespondCmd) Run(ctx context.Context, flags *RootFlags) error {
 	patch := &calendar.Event{
 		Attendees: event.Attendees,
 	}
-	updated, err := mutation.patchEvent(eventID, patch, "")
+	updated, err := mutation.patchEvent(ctx, eventID, patch, "")
 	if err != nil {
 		return err
 	}
 
 	if outfmt.IsJSON(ctx) {
-		return mutation.writeEvent(updated)
+		return mutation.writeEvent(ctx, updated)
 	}
 
 	u.Out().Printf("id\t%s", updated.Id)
